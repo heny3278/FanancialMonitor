@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { createMockTransaction, createTransaction } from "../services/api";
-import type { Transaction } from "../types/transaction";
+import { createMockTransaction, createTransaction } from "../APIs/TransactionApi";
+import type { Transaction } from "../Models/transaction";
 
 export function AddPage() {
   const [transaction, setTransaction] = useState<Transaction>(createMockTransaction());
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"success" | "error">("success");
 
   const update = <K extends keyof Transaction>(key: K, value: Transaction[K]) =>
     setTransaction(current => ({ ...current, [key]: value }));
@@ -13,21 +14,29 @@ export function AddPage() {
     try {
       await createTransaction(transaction);
       setMessage("Transaction sent successfully.");
+      setMessageType("success");
       setTransaction(createMockTransaction());
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Request failed");
+      setMessageType("error");
     }
   };
 
   const generate = () => {
     setTransaction(createMockTransaction());
     setMessage("");
+    setMessageType("success");
   };
 
   return (
-    <section className="card">
-      <h2>Transaction Simulator</h2>
-      <p className="muted">Generate a mock transaction and send it to the backend.</p>
+    <section className="card form-card">
+      <div className="card-heading">
+        <div>
+          <p className="eyebrow">Outbound event</p>
+          <h2>Transaction simulator</h2>
+          <p>Generate a mock transaction and send it to the backend.</p>
+        </div>
+      </div>
 
       <div className="form-grid">
         <label>
@@ -64,7 +73,7 @@ export function AddPage() {
         <button className="primary" onClick={() => void submit()}>Send Transaction</button>
       </div>
 
-      {message && <div className="message">{message}</div>}
+      {message && <div className={`message message-${messageType}`}>{message}</div>}
     </section>
   );
 }

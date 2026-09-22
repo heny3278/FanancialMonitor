@@ -4,13 +4,15 @@ import {
   HubConnectionState,
   LogLevel
 } from "@microsoft/signalr";
-import type { Transaction } from "../types/transaction";
-import { API_URL } from "../services/api";
+import type { Transaction } from "../Models/transaction";
+import { API_URL, isTransaction } from "../APIs/TransactionApi";
 
 const MAX_VISIBLE_TRANSACTIONS = 500;
 
 export function useTransactionStream() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [newTransactionId, setNewTransactionId] = useState<string | null>(null);
+  const [notificationTrigger, setNotificationTrigger] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
@@ -24,8 +26,21 @@ export function useTransactionStream() {
 
     connection.on("TransactionReceived", (transaction: Transaction) => {
       if (!mounted) return;
+      if (!isTransaction(transaction)) return;
 
+      setNewTransactionId(transaction.transactionId);
+      setNotificationTrigger(`${transaction.transactionId}-${Date.now()}`);
       setTransactions(current => {
+        const existingIndex = current.findIndex(
+          item => item.transactionId === transaction.transactionId
+        );
+
+        if (existingIndex >= 0) {
+          const next = [...current];
+          next[existingIndex] = transaction;
+          return next;
+        }
+
         const next = [transaction, ...current];
         return next.length > MAX_VISIBLE_TRANSACTIONS
           ? next.slice(0, MAX_VISIBLE_TRANSACTIONS)
@@ -56,5 +71,11 @@ export function useTransactionStream() {
     };
   }, []);
 
-  return { transactions, setTransactions, connected };
+  return {
+    transactions,
+    setTransactions,
+    connected,
+    newTransactionId,
+    notificationTrigger
+  };
 }

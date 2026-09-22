@@ -1,16 +1,39 @@
 import { useEffect, useMemo, useState } from "react";
-import { getLatestTransactions } from "../services/api";
-import { TransactionTable } from "../components/TransactionTable";
-import { useTransactionStream } from "../hooks/useTransactionStream";
+import { getLatestTransactions } from "../APIs/TransactionApi";
+import { TransactionTable } from "../Components/TransactionTable";
+import { NotificationBell } from "../Components/NotificationBell";
+import { useTransactionStream } from "../Hooks/useTransactionStream";
 
 export function MonitorPage() {
-  const { transactions, setTransactions, connected } = useTransactionStream();
+  const {
+    transactions,
+    setTransactions,
+    connected,
+    newTransactionId,
+    notificationTrigger
+  } = useTransactionStream();
   const [showErrorsOnly, setShowErrorsOnly] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    void getLatestTransactions()
-      .then(setTransactions)
-      .catch(() => setTransactions([]));
+    const controller = new AbortController();
+    setLoading(true);
+    setLoadError("");
+
+    void getLatestTransactions(controller.signal)
+      .then(latest => {
+        setTransactions(latest);
+        setLoading(false);
+      })
+      .catch(error => {
+        if (controller.signal.aborted) return;
+        setTransactions([]);
+        setLoadError(error instanceof Error ? error.message : "Failed to load transactions");
+        setLoading(false);
+      });
+
+    return () => controller.abort();
   }, [setTransactions]);
 
   const visibleTransactions = useMemo(
@@ -19,17 +42,27 @@ export function MonitorPage() {
       : transactions,
     [transactions, showErrorsOnly]
   );
+  const completedCount = transactions.filter(transaction => transaction.status === "Completed").length;
+  const failedCount = transactions.filter(transaction => transaction.status === "Failed").length;
 
   return (
-    <section className="card">
+    <section className="card monitor-card">
       <div className="monitor-header">
         <div>
-          <h2>Live Dashboard</h2>
-          <p className="muted">Real-time transactions received through SignalR.</p>
+          <p className="eyebrow">Live observability</p>
+          <h2>Transaction stream</h2>
+          <p className="muted">Real-time activity received through SignalR.</p>
         </div>
         <div className={`connection ${connected ? "online" : "offline"}`}>
           <span /> {connected ? "Connected" : "Disconnected"}
         </div>
+        <NotificationBell trigger={notificationTrigger} />
+      </div>
+
+      <div className="metrics">
+        <div className="metric"><span className="metric-label">Total received</span><strong className="metric-value">{transactions.length}</strong></div>
+        <div className="metric"><span className="metric-label">Completed</span><strong className="metric-value success">{completedCount}</strong></div>
+        <div className="metric"><span className="metric-label">Failed</span><strong className="metric-value failed">{failedCount}</strong></div>
       </div>
 
       <div className="toolbar">
@@ -44,7 +77,9 @@ export function MonitorPage() {
         <span>{visibleTransactions.length} displayed</span>
       </div>
 
-      <TransactionTable transactions={visibleTransactions} />
+      {loading && <div className="empty">Loading transactions...</div>}
+      {!loading && loadError && <div className="message message-error">{loadError}</div>}
+      {!loading && !loadError && <TransactionTable transactions={visibleTransactions} newTransactionId={newTransactionId} />}
     </section>
   );
 }

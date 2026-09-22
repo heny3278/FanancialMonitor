@@ -7,3 +7,4 @@ export interface Transaction {
   status: TransactionStatus;
   timestamp: string;
 }
+
